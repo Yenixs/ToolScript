@@ -8018,27 +8018,25 @@ Color3.fromHex'#AE4FE0',
 				Pink = {
 					_id = 'Pink',
 					Dark = {
-						SwitchAccent = Color3.fromHex'#db16a3',
-						Selection = Color3.fromHex'#de1597',
-						SelectionFocused = Color3.fromHex'#e816ac',
+						SwitchAccent      = Color3.fromHex'#9B2D6F',
+						Selection         = Color3.fromHex'#B8336A',
+						SelectionFocused  = Color3.fromHex'#C9447A',
 						Toggle = {
-							SwitchOn = Color3.fromHex'#ed0996'
+							SwitchOn      = Color3.fromHex'#D4547E'
 						},
 						Button = {
-							FillPrimary = b('#dc11ac',
-'#C00030')
+							FillPrimary   = b('#A0245E', '#6B1040')
 						}
 					},
 					Light = {
-						SwitchAccent = Color3.fromHex'#db16a3',
-						Selection = Color3.fromHex'#de1597',
-						SelectionFocused = Color3.fromHex'#e816ac',
+						SwitchAccent      = Color3.fromHex'#9B2D6F',
+						Selection         = Color3.fromHex'#B8336A',
+						SelectionFocused  = Color3.fromHex'#C9447A',
 						Toggle = {
-							SwitchOn = Color3.fromHex'#ed0996'
+							SwitchOn      = Color3.fromHex'#D4547E'
 						},
 						Button = {
-							FillPrimary = b('#dc11ac',
-'#C00030')
+							FillPrimary   = b('#A0245E', '#6B1040')
 						}
 					}
 				},
