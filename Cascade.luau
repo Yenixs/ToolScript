@@ -1,6 +1,14 @@
 local a = {
 	cache = {}
 }
+
+do 
+	if getgenv().CascadeExists then 
+		getgenv().CascadeExists:Destroy()
+		getgenv().CascadeExists = nil
+	end 
+end
+
 do
 	do
 		local b = function()
