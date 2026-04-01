@@ -8288,6 +8288,7 @@ ProtectUI(k'ScreenGui'{
 		DisplayOrder = 200,
 		OnTopOfCoreBlur = true
 	}))
+    getgenv().CascadeExists = w.__instance
 	local x = (k'ImageButton'{
 		Name = 'WindowPill',
 		AnchorPoint = Vector2.new(0.5, 0),
