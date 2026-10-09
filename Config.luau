@@ -2,46 +2,93 @@ local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
 
 return function(FolderName, Env)
-    if not writefile or not isfolder or not isfile then return end
-    if not FolderName or typeof(FolderName) ~= "string" then return end 
-    if not Env or typeof(Env) ~= "table" then return end 
+    if not writefile or not isfolder or not isfile or not makefolder then
+        return
+    end
+
+    if typeof(FolderName) ~= "string" or FolderName == "" then
+        return
+    end
+
+    if typeof(Env) ~= "table" then
+        return
+    end
+
+    local StateKey = "__LUACX_CONFIG_MANAGER_STATE"
+    local StateRoot = Env[StateKey]
+
+    if typeof(StateRoot) ~= "table" then
+        StateRoot = {}
+        Env[StateKey] = StateRoot
+    end
+
+    local SharedState = StateRoot[FolderName]
+
+    if typeof(SharedState) ~= "table" then
+        SharedState = {
+            ConfigValues = {},
+            ActiveThreads = {},
+        }
+
+        StateRoot[FolderName] = SharedState
+    end
+
+    if typeof(SharedState.ConfigValues) ~= "table" then
+        SharedState.ConfigValues = {}
+    end
+
+    if typeof(SharedState.ActiveThreads) ~= "table" then
+        SharedState.ActiveThreads = {}
+    end
 
     local Module = {
         Config = {},
-        
-        Thread = {}
+        Thread = {},
     }
 
     Module.__index = Module
 
-    local ConfigValues = {}
-    local ActiveThreads = {}
+    local ConfigValues = SharedState.ConfigValues
+    local ActiveThreads = SharedState.ActiveThreads
+    local CurrentFolder = FolderName
     local IsLoading = false
     local SaveScheduled = false
 
-    local Path = FolderName .. "/" .. Players.LocalPlayer.Name .. "-config.json"
+    local function GetConfigPath()
+        if not isfolder(CurrentFolder) then
+            makefolder(CurrentFolder)
+        end
 
-    for key, value in pairs(Module.Config) do
-        ConfigValues[key] = value
-        rawset(Module.Config, key, nil)
+        local LocalPlayer = Players.LocalPlayer
+
+        if not LocalPlayer then
+            error("LocalPlayer is not available", 2)
+        end
+
+        return CurrentFolder .. "/" .. LocalPlayer.Name .. "-config.json"
     end
 
-    local function IsSaveable(value)
-        local valueType = typeof(value)
+    local function IsSaveable(Value)
+        local ValueType = typeof(Value)
 
-        return valueType == "boolean" or valueType == "string" or valueType == "number"
+        return ValueType == "boolean"
+            or ValueType == "string"
+            or ValueType == "number"
     end
 
     local function SaveConfig()
-        local settings = {}
+        local Settings = {}
 
-        for key, value in pairs(ConfigValues) do
-            if typeof(key) == "string" and IsSaveable(value) then
-                settings[key] = value
+        for Key, Value in pairs(ConfigValues) do
+            if typeof(Key) == "string" and IsSaveable(Value) then
+                Settings[Key] = Value
             end
         end
 
-        writefile(Path, HttpService:JSONEncode(settings))
+        writefile(
+            GetConfigPath(),
+            HttpService:JSONEncode(Settings)
+        )
     end
 
     local function ScheduleSave()
@@ -54,65 +101,82 @@ return function(FolderName, Env)
         task.delay(0.25, function()
             SaveScheduled = false
 
-            local ok, err = pcall(SaveConfig)
-            if not ok then
-                warn("Config save failed: " .. tostring(err))
+            local Ok, ErrorMessage = pcall(SaveConfig)
+
+            if not Ok then
+                warn("Config save failed: " .. tostring(ErrorMessage))
             end
         end)
     end
 
+    for Key, Value in pairs(Module.Config) do
+        if typeof(Key) == "string" then
+            if ConfigValues[Key] == nil then
+                ConfigValues[Key] = Value
+            end
+
+            Env[Key] = ConfigValues[Key]
+        end
+
+        rawset(Module.Config, Key, nil)
+    end
+
     setmetatable(Module.Config, {
-        __index = function(_, key)
-            return ConfigValues[key]
+        __index = function(_, Key)
+            return Env[Key]
         end,
 
-        __newindex = function(_, key, value)
-            if typeof(key) ~= "string" then
+        __newindex = function(_, Key, Value)
+            if typeof(Key) ~= "string" then
                 error("Config keys must be strings", 2)
             end
 
-            if ConfigValues[key] == value then
-                return
-            end
+            local Changed = ConfigValues[Key] ~= Value
 
-            ConfigValues[key] = value
-            ScheduleSave()
+            ConfigValues[Key] = Value
+            Env[Key] = Value
+
+            if Changed then
+                ScheduleSave()
+            end
         end,
 
         __iter = function()
-            local key
+            local Key
 
             return function()
-                key = next(ConfigValues, key)
+                Key = next(ConfigValues, Key)
 
-                if key ~= nil then
-                    return key, ConfigValues[key]
+                if Key ~= nil then
+                    return Key, Env[Key]
                 end
             end
         end,
     })
 
-    function Module.Thread:Load(folder)
-        if folder ~= nil then
-            if typeof(folder) ~= "string" or folder == "" then
+    function Module.Thread:Load(Folder)
+        if Folder ~= nil then
+            if typeof(Folder) ~= "string" or Folder == "" then
                 error("Config folder must be a non-empty string", 2)
             end
 
-            self.Folder = folder
+            CurrentFolder = Folder
         end
 
         IsLoading = true
 
         local Ok, Result = pcall(function()
+            local Path = GetConfigPath()
+
             if isfile(Path) then
-                local readOk, settings = pcall(function()
+                local ReadOk, Settings = pcall(function()
                     return HttpService:JSONDecode(readfile(Path))
                 end)
 
-                if readOk and type(settings) == "table" then
-                    for key, value in pairs(settings) do
-                        if typeof(key) == "string" and IsSaveable(value) then
-                            Module.Config[key] = value
+                if ReadOk and type(Settings) == "table" then
+                    for Key, Value in pairs(Settings) do
+                        if typeof(Key) == "string" and IsSaveable(Value) then
+                            Module.Config[Key] = Value
                         end
                     end
                 end
@@ -130,62 +194,68 @@ return function(FolderName, Env)
         return Result
     end
 
-    function Module.Thread:Add(configName, callback, delayTime)
-        if typeof(configName) ~= "string" or configName == "" then
+    function Module.Thread:Add(ConfigName, Callback, DelayTime)
+        if typeof(ConfigName) ~= "string" or ConfigName == "" then
             error("ConfigName must be a non-empty string", 2)
         end
 
-        if typeof(callback) ~= "function" then
+        if typeof(Callback) ~= "function" then
             error("Callback must be a function", 2)
         end
 
-        delayTime = delayTime or 0.1
+        DelayTime = DelayTime or 0.1
 
-        if typeof(delayTime) ~= "number" or delayTime < 0 or delayTime ~= delayTime then
+        if typeof(DelayTime) ~= "number"
+            or DelayTime < 0
+            or DelayTime ~= DelayTime then
             error("Delay must be a non-negative number", 2)
         end
 
-        local previous = ActiveThreads[configName]
-        if previous then
-            previous.Cancelled = true
+        local Previous = ActiveThreads[ConfigName]
+
+        if Previous then
+            Previous.Cancelled = true
         end
 
-        local entry = {
+        local Entry = {
             Cancelled = false,
         }
 
-        ActiveThreads[configName] = entry
+        ActiveThreads[ConfigName] = Entry
 
-        entry.Thread = task.spawn(xpcall, function()
-            while not entry.Cancelled do
-                if Env[configName] == true then
-                    local ok, err = pcall(callback)
+        Entry.Thread = task.spawn(function()
+            while not Entry.Cancelled do
+                if Env[ConfigName] == true then
+                    local Ok, ErrorMessage = pcall(Callback)
 
-                    if not ok then
-                        warn("Thread '" .. configName .. "' failed: " .. tostring(err))
+                    if not Ok then
+                        warn(
+                            "Thread '" .. ConfigName .. "' failed: "
+                                .. tostring(ErrorMessage)
+                        )
                     end
                 end
 
-                task.wait(delayTime)
+                task.wait(DelayTime)
             end
 
-            if ActiveThreads[configName] == entry then
-                ActiveThreads[configName] = nil
+            if ActiveThreads[ConfigName] == Entry then
+                ActiveThreads[ConfigName] = nil
             end
-        end, warn)
+        end)
 
-        return entry.Thread
+        return Entry.Thread
     end
 
-    function Module.Thread:Remove(configName)
-        local entry = ActiveThreads[configName]
+    function Module.Thread:Remove(ConfigName)
+        local Entry = ActiveThreads[ConfigName]
 
-        if not entry then
+        if not Entry then
             return false
         end
 
-        entry.Cancelled = true
-        ActiveThreads[configName] = nil
+        Entry.Cancelled = true
+        ActiveThreads[ConfigName] = nil
 
         return true
     end
